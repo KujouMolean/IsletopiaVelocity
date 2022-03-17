@@ -1,5 +1,6 @@
 package com.molean.isletopia.velocity.individual;
 
+import com.molean.isletopia.shared.database.IslandDao;
 import com.molean.isletopia.shared.database.MSPTDao;
 import com.molean.isletopia.shared.database.UUIDDao;
 import com.molean.isletopia.shared.message.ServerMessageUtils;
@@ -46,25 +47,37 @@ public class PlayerLogin {
             UUIDDao.insert(player.getUniqueId(), player.getUsername());
         }
         UUID uuid = player.getUniqueId();
-        String server = UniversalParameter.getParameter(uuid, "server");
-        if (server == null || server.isEmpty()) {
+        Integer integer = null;
+        try {
+            integer = IslandDao.countIslandByPlayer(uuid);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        String server = null;
+        if (integer == null || integer == 0) {
             ArrayList<RegisteredServer> islandServer = new ArrayList<>();
-            Map<RegisteredServer, Double> msptMap = new HashMap<>();
+            Map<RegisteredServer, Double> balanceMap = new HashMap<>();
             for (RegisteredServer allServer : VelocityRelatedUtils.getProxyServer().getAllServers()) {
                 if (allServer.getServerInfo().getName().startsWith("server")) {
                     islandServer.add(allServer);
+                    double balance = 25;
                     try {
-                        msptMap.put(allServer, MSPTDao.queryLastMSPT(server));
+                        balance = MSPTDao.queryLastMSPT(allServer.getServerInfo().getName());
                     } catch (SQLException e) {
                         e.printStackTrace();
                     }
+                    balanceMap.put(allServer, balance);
                 }
             }
-            int index = (int) Math.floor(Math.sqrt(new Random().nextInt(islandServer.size() * islandServer.size())));
-            islandServer.sort(Comparator.comparingDouble(msptMap::get));
+            System.out.println("==Balance start==");
+            System.out.println("Balance Info: " + balanceMap);
+            int i = new Random().nextInt(islandServer.size() * islandServer.size());
+            int index = (int) Math.floor(Math.sqrt(i));
+            islandServer.sort(Comparator.comparingDouble(balanceMap::get));
             Collections.reverse(islandServer);
-
             RegisteredServer registeredServer = islandServer.get(index);
+            System.out.println("Random int: " + i + ", selected " + registeredServer.getServerInfo().getName());
+            System.out.println("==Balance end==");
             UniversalParameter.setParameter(uuid, "server", registeredServer.getServerInfo().getName());
             server = registeredServer.getServerInfo().getName();
         }
