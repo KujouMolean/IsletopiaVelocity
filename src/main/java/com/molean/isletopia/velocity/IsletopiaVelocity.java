@@ -30,7 +30,6 @@ public class IsletopiaVelocity {
 
     private final ProxyServer server;
     private final Logger logger;
-
     private static final Set<String> blacklist = Set.of(
             "IsletopiaShared"
     );
@@ -75,7 +74,6 @@ public class IsletopiaVelocity {
         new IslandCommand();
         new DisableServerCommand();
         new ClientDetect();
-        new Punishment();
     }
 
     @Subscribe

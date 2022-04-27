@@ -1,10 +1,15 @@
 package com.molean.isletopia.velocity.cirno;
 
+import com.molean.isletopia.shared.utils.Pair;
+import com.molean.isletopia.shared.utils.StringUtils;
+import com.molean.isletopia.velocity.MessageUtils;
 import  com.molean.isletopia.velocity.cirno.command.group.WBan;
+import com.velocitypowered.api.event.player.PlayerChatEvent;
 import  net.mamoe.mirai.Bot;
 import net.mamoe.mirai.contact.NormalMember;
 import net.mamoe.mirai.message.data.*;
 
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -17,7 +22,6 @@ public class CirnoHandlerImpl implements CirnoHandler {
         Matcher matcher = pattern.matcher(originText);
         if (matcher.matches()) {
             String group = matcher.group(1);
-            System.out.println(group);
             return "@" + group + " ";
         } else {
             return quoteReply.contentToString();
@@ -75,6 +79,63 @@ public class CirnoHandlerImpl implements CirnoHandler {
     }
 
 
+    final public static Map<Long, List<Pair<String, Long>>> playerChats = new HashMap<>();
+    private static long lastTrim = 0L;
+
+    public void addRecord(Long id, String msg) {
+        if (!playerChats.containsKey(id)) {
+            playerChats.put(id, new ArrayList<>());
+        }
+        List<Pair<String, Long>> pairs = playerChats.get(id);
+        pairs.add(Pair.of(msg, System.currentTimeMillis()));
+    }
+
+    public int previousSimilar(Long id, String msg) {
+        int cnt = 0;
+
+        List<String> recordsRecent30s = getRecordsRecent30s(id);
+        for (String recordsRecent30 : recordsRecent30s) {
+            if (StringUtils.Levenshtein(msg, recordsRecent30) > 0.5) {
+                cnt++;
+            }
+        }
+        return cnt;
+    }
+
+    public List<String> getRecordsRecent30s(Long id) {
+        ArrayList<String> strings = new ArrayList<>();
+        List<Pair<String, Long>> pairs = playerChats.get(id);
+        if (pairs == null || pairs.isEmpty()) {
+
+            return strings;
+        }
+        for (Pair<String, Long> pair : pairs) {
+            if (pair.getValue() > System.currentTimeMillis() - 30 * 1000) {
+                strings.add(pair.getKey());
+            }
+        }
+        return strings;
+    }
+
+    public void trim() {
+        if (System.currentTimeMillis() - lastTrim < 30 * 1000) {
+            return;
+        }
+        lastTrim = System.currentTimeMillis();
+        ArrayList<Long> tobeRemove = new ArrayList<>();
+        for (Long id : playerChats.keySet()) {
+            List<Pair<String, Long>> pairs = playerChats.get(id);
+            pairs.removeIf(stringLongPair -> stringLongPair.getValue() < System.currentTimeMillis() - 30 * 1000);
+            if (pairs.isEmpty()) {
+                tobeRemove.add(id);
+            }
+        }
+
+        for (Long id : tobeRemove) {
+            playerChats.remove(id);
+        }
+    }
+
     @Override
     public void handler(long id, String nameCard, String plainMessage, MessageChain messageChain) {
         for (Bot bot : CirnoBot.getSubBotList()) {
@@ -108,7 +169,15 @@ public class CirnoHandlerImpl implements CirnoHandler {
                 }
             }
         }
-
+        trim();
+        if (previousSimilar(id, plainMessage1) >= 2) {
+            bad = true;
+            if (normalMember != null && !PermissionHandler.hasPermission("spam.bypass", id)) {
+                normalMember.mute(60);
+            }
+            MessageSource.recall(messageChain);
+        }
+        addRecord(id, plainMessage1);
         if (!bad) {
             CirnoUtils.broadcastChat(CirnoUtils.getNameCardByQQ(id), plainMessage1);
         }
@@ -130,9 +199,6 @@ public class CirnoHandlerImpl implements CirnoHandler {
                     }
                 }
             }
-
         }
-
-
     }
 }

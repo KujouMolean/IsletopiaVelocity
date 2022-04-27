@@ -47,7 +47,7 @@ public class SwitchServerHandler implements MessageHandler<SwitchServerRequest> 
                     return;
                 }
                 proxiedPlayer.get().createConnectionRequest(server.get()).connect();
-                Logger.getGlobal().info("Switch " + player + " from " + name + " to " + targetServer);
+                PlatformRelatedUtils.getInstance().getLogger().info("Switch " + player + " from " + name + " to " + targetServer);
                 return;
             }
         });

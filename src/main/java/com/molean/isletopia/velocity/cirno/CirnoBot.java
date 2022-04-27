@@ -2,6 +2,8 @@ package com.molean.isletopia.velocity.cirno;
 
 import com.molean.isletopia.shared.platform.VelocityRelatedUtils;
 import com.molean.isletopia.shared.utils.PropertiesUtils;
+import com.molean.isletopia.velocity.cirno.event.GroupMessage;
+import com.molean.isletopia.velocity.cirno.event.MemberJoin;
 import net.mamoe.mirai.Bot;
 import net.mamoe.mirai.BotFactory;
 import net.mamoe.mirai.utils.BotConfiguration;
@@ -56,7 +58,7 @@ public class CirnoBot {
                 }
             });
             mainBot.login();
-            new ListenerRegister();
+            new GroupMessage(mainBot);
 
         }).schedule();
 
@@ -76,6 +78,7 @@ public class CirnoBot {
                 });
                 subBotList.add(bot);
                 bot.login();
+                new MemberJoin(bot);
             }).schedule();
         });
     }

@@ -8,6 +8,7 @@ import com.molean.isletopia.shared.platform.VelocityRelatedUtils;
 import com.molean.isletopia.shared.pojo.obj.PlaySoundObject;
 import com.molean.isletopia.shared.service.UniversalParameter;
 import com.molean.isletopia.shared.utils.*;
+import com.molean.isletopia.velocity.MessageUtils;
 import com.molean.isletopia.velocity.cirno.CirnoUtils;
 import com.molean.isletopia.velocity.cirno.I18nString;
 import com.velocitypowered.api.event.Subscribe;
@@ -24,6 +25,7 @@ import net.kyori.adventure.text.event.HoverEvent;
 
 import java.sql.SQLException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -33,13 +35,72 @@ import java.util.stream.Collectors;
 public class UniversalChat {
     final public static Map<String, Set<String>> collections = new HashMap<>();
     final public static Map<String, String> commandMapping = new HashMap<>();
+    final public static Map<UUID, List<Pair<String, Long>>> playerChats = new HashMap<>();
+    private static long lastTrim = 0L;
 
+    public void addRecord(UUID uuid, String msg) {
+        if (!playerChats.containsKey(uuid)) {
+            playerChats.put(uuid, new ArrayList<>());
+        }
+        List<Pair<String, Long>> pairs = playerChats.get(uuid);
+        pairs.add(Pair.of(msg, System.currentTimeMillis()));
+    }
+
+    public int previousSimilar(UUID uuid, String msg) {
+        int cnt = 0;
+
+        List<String> recordsRecent30s = getRecordsRecent30s(uuid);
+        for (String recordsRecent30 : recordsRecent30s) {
+            if (StringUtils.Levenshtein(msg, recordsRecent30) > 0.5) {
+                cnt++;
+            }
+        }
+        return cnt;
+    }
+
+    public List<String> getRecordsRecent30s(UUID uuid) {
+        ArrayList<String> strings = new ArrayList<>();
+        List<Pair<String, Long>> pairs = playerChats.get(uuid);
+        if (pairs == null || pairs.isEmpty()) {
+
+            return strings;
+        }
+        for (Pair<String, Long> pair : pairs) {
+            if (pair.getValue() > System.currentTimeMillis() - 30 * 1000) {
+                strings.add(pair.getKey());
+            }
+        }
+        return strings;
+    }
+
+    public void trim() {
+        if (System.currentTimeMillis() - lastTrim < 30 * 1000) {
+            return;
+        }
+        lastTrim = System.currentTimeMillis();
+
+        ArrayList<UUID> tobeRemove = new ArrayList<>();
+
+
+        for (UUID uuid : playerChats.keySet()) {
+            List<Pair<String, Long>> pairs = playerChats.get(uuid);
+            pairs.removeIf(stringLongPair -> stringLongPair.getValue() < System.currentTimeMillis() - 30 * 1000);
+            if (pairs.isEmpty()) {
+                tobeRemove.add(uuid);
+            }
+        }
+
+        for (UUID uuid : tobeRemove) {
+            playerChats.remove(uuid);
+        }
+    }
 
     @Subscribe
     public void on(PlayerChatEvent event) {
         if (event.getMessage().startsWith("/")) {
             return;
         }
+
         Optional<ServerConnection> currentServer = event.getPlayer().getCurrentServer();
         if (currentServer.isEmpty()) {
             event.setResult(PlayerChatEvent.ChatResult.denied());
@@ -52,7 +113,15 @@ public class UniversalChat {
 
         String p = event.getPlayer().getUsername();
         String m = event.getMessage();
+        trim();
 
+        if (previousSimilar(event.getPlayer().getUniqueId(), m) >= 2) {
+            event.setResult(PlayerChatEvent.ChatResult.denied());
+            MessageUtils.warn(event.getPlayer(), "不要刷屏!");
+            return;
+        }
+
+        addRecord(event.getPlayer().getUniqueId(), m);
         List<String> channels = ChatChannel.getChannels(event.getPlayer().getUniqueId());
         for (String channel : channels) {
             UniversalChat.chatMessage(channel, p, I18nString.of(m));
@@ -60,7 +129,6 @@ public class UniversalChat {
                 CirnoUtils.groupMessage("<" + p + "> " + m);
             }
         }
-
         event.setResult(PlayerChatEvent.ChatResult.denied());
     }
 
@@ -179,9 +247,11 @@ public class UniversalChat {
         ArrayList<Player> targetPlayerList = new ArrayList<>(targetPlayers);
         targetPlayerList.sort((o1, o2) -> o2.getUsername().length() - o1.getUsername().length());
 
-        HashMap<Integer, Island> idCache = new HashMap<>();
-        HashMap<IslandId, Island> islandIdCache = new HashMap<>();
+        ConcurrentHashMap<Integer, Island> idCache = new ConcurrentHashMap<>();
+        ConcurrentHashMap<IslandId, Island> islandIdCache = new ConcurrentHashMap<>();
+        ConcurrentHashMap<Locale, String> displayCache = new ConcurrentHashMap<>();
 
+        UUID uuid = UUIDManager.get(sourcePlayer);
 
         for (Player targetPlayer : targetPlayers) {
             String rawMessage = I18n.getMessage(targetPlayer.getPlayerSettings().getLocale(), i18nString.getNode());
@@ -193,13 +263,18 @@ public class UniversalChat {
             }
             Set<String> collections = UniversalChat.collections.get(targetPlayer.getUsername());
             boolean subscribe = collections != null && collections.contains(sourcePlayer.replaceAll("§.", ""));
-            chatMessageToPlayer(sourcePlayer, targetPlayer, rawMessage, color, subscribe, targetPlayerList, idCache, islandIdCache);
+
+            String finalRawMessage = rawMessage;
+            VelocityRelatedUtils.getInstance().runAsync(() -> {
+                chatMessageToPlayer(sourcePlayer, uuid, targetPlayer, finalRawMessage, color, subscribe, targetPlayerList, idCache, islandIdCache, displayCache);
+            });
         }
 
     }
 
-    public static void chatMessageToPlayer(String sourcePlayer, Player target, String message, String color, boolean subscribe, ArrayList<Player> targetPlayerListWithLengthDescOrder, HashMap<Integer, Island> idCache, HashMap<IslandId, Island> islandIdCache) {
+    public static void chatMessageToPlayer(String sourcePlayer, UUID sourcePlayerUUID, Player target, String message, String color, boolean subscribe, ArrayList<Player> targetPlayerListWithLengthDescOrder, Map<Integer, Island> idCache, Map<IslandId, Island> islandIdCache, Map<Locale, String> playerDisplayCache) {
 
+        Locale locale = target.getPlayerSettings().getLocale();
         //遍历文本，进行特殊替换。
         TextComponent.Builder mainText = Component.text();
         int i = 0;
@@ -241,9 +316,14 @@ public class UniversalChat {
                     //添加点击指令
                     String cmd = "/player " + player.getUsername();
                     textComponent = textComponent.clickEvent(ClickEvent.runCommand(cmd));
-                    UUID uuid = UUIDManager.get(sourcePlayer);
-                    if (uuid != null) {
-                        textComponent = textComponent.hoverEvent(HoverEvent.showText(Component.text(PlayerUtils.getDisplay(uuid))));
+                    if (sourcePlayerUUID != null) {
+                        if (playerDisplayCache.containsKey(locale)) {
+                            textComponent = textComponent.hoverEvent(HoverEvent.showText(Component.text(playerDisplayCache.get(locale))));
+                        } else {
+                            String display = PlayerUtils.getDisplay(sourcePlayerUUID);
+                            playerDisplayCache.put(locale, display);
+                            textComponent = textComponent.hoverEvent(HoverEvent.showText(Component.text(playerDisplayCache.get(locale))));
+                        }
 
                     }
 
@@ -473,15 +553,21 @@ public class UniversalChat {
         mainText.append(Component.text(color + message.substring(i)));
         TextComponent.Builder commonFinalText = Component.text();
 
-        UUID uuid = UUIDManager.get(sourcePlayer);
         {
             commonFinalText.append(Component.text("§r" + color + "<"));
             String visitCmd = "/player " + sourcePlayer.replaceAll("§.", "");
             TextComponent nameComponent = Component.text(color + sourcePlayer)
                     .clickEvent(ClickEvent.runCommand(visitCmd));
-            if (uuid != null) {
-                nameComponent = nameComponent.hoverEvent(HoverEvent.showText(Component.text(PlayerUtils.getDisplay(uuid))));
+            if (sourcePlayerUUID != null) {
+                if (playerDisplayCache.containsKey(locale)) {
+                    nameComponent = nameComponent.hoverEvent(HoverEvent.showText(Component.text(playerDisplayCache.get(locale))));
+                } else {
+                    String display = PlayerUtils.getDisplay(sourcePlayerUUID);
+                    playerDisplayCache.put(locale, display);
+                    nameComponent = nameComponent.hoverEvent(HoverEvent.showText(Component.text(playerDisplayCache.get(locale))));
+                }
             }
+
             commonFinalText.append(nameComponent);
             commonFinalText.append(Component.text("§r" + color + ">"));
             commonFinalText.append(Component.text(" "));
@@ -489,15 +575,21 @@ public class UniversalChat {
         }
         TextComponent.Builder collectionFinalText = Component.text();
 
-
         {
             collectionFinalText.append(Component.text("§r" + color + "<"));
             String visitCmd = "/player " + sourcePlayer.replaceAll("§.", "");
             TextComponent nameComponent = Component.text("§3" + sourcePlayer)
                     .clickEvent(ClickEvent.runCommand(visitCmd));
-            if (uuid != null) {
-                nameComponent = nameComponent.hoverEvent(HoverEvent.showText(Component.text(PlayerUtils.getDisplay(uuid))));
+            if (sourcePlayerUUID != null) {
+                if (playerDisplayCache.containsKey(locale)) {
+                    nameComponent = nameComponent.hoverEvent(HoverEvent.showText(Component.text(playerDisplayCache.get(locale))));
+                } else {
+                    String display = PlayerUtils.getDisplay(sourcePlayerUUID);
+                    playerDisplayCache.put(locale, display);
+                    nameComponent = nameComponent.hoverEvent(HoverEvent.showText(Component.text(playerDisplayCache.get(locale))));
+                }
             }
+
 
             collectionFinalText.append(nameComponent);
             collectionFinalText.append(Component.text("§r" + color + ">"));

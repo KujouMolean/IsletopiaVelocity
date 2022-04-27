@@ -45,8 +45,6 @@ public class UniversalTell implements SimpleCommand {
             return;
         }
 
-        //
-
         ArrayList<String> strings = new ArrayList<>(Arrays.asList(args));
         strings.remove(0);
         String message = String.join(" ", strings);

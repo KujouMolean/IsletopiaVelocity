@@ -4,6 +4,7 @@ import com.molean.isletopia.shared.database.IslandDao;
 import com.molean.isletopia.shared.database.MSPTDao;
 import com.molean.isletopia.shared.database.UUIDDao;
 import com.molean.isletopia.shared.message.ServerMessageUtils;
+import com.molean.isletopia.shared.platform.PlatformRelatedUtils;
 import com.molean.isletopia.shared.platform.VelocityRelatedUtils;
 import com.molean.isletopia.shared.service.UniversalParameter;
 import com.velocitypowered.api.event.Subscribe;
@@ -69,15 +70,15 @@ public class PlayerLogin {
                     balanceMap.put(allServer, balance);
                 }
             }
-            System.out.println("==Balance start==");
-            System.out.println("Balance Info: " + balanceMap);
+            PlatformRelatedUtils.getInstance().getLogger().info("==Balance start==");
+            PlatformRelatedUtils.getInstance().getLogger().info("Balance Info: " + balanceMap);
             int i = new Random().nextInt(islandServer.size() * islandServer.size());
             int index = (int) Math.floor(Math.sqrt(i));
             islandServer.sort(Comparator.comparingDouble(balanceMap::get));
             Collections.reverse(islandServer);
             RegisteredServer registeredServer = islandServer.get(index);
-            System.out.println("Random int: " + i + ", selected " + registeredServer.getServerInfo().getName());
-            System.out.println("==Balance end==");
+            PlatformRelatedUtils.getInstance().getLogger().info("Random int: " + i + ", selected " + registeredServer.getServerInfo().getName());
+            PlatformRelatedUtils.getInstance().getLogger().info("==Balance end==");
             UniversalParameter.setParameter(uuid, "server", registeredServer.getServerInfo().getName());
             server = registeredServer.getServerInfo().getName();
         }

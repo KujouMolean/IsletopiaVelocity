@@ -2,11 +2,13 @@ package com.molean.isletopia.velocity.cirno.event;
 
 import  com.molean.isletopia.velocity.cirno.CirnoBot;
 import  com.molean.isletopia.velocity.cirno.CirnoUtils;
+import kotlin.coroutines.CoroutineContext;
 import net.mamoe.mirai.Bot;
 import net.mamoe.mirai.event.EventHandler;
 import net.mamoe.mirai.event.SimpleListenerHost;
 import net.mamoe.mirai.event.events.GroupMessageEvent;
 import net.mamoe.mirai.message.data.*;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.Calendar;
 import java.util.regex.Matcher;
@@ -14,8 +16,13 @@ import java.util.regex.Pattern;
 
 public class GroupMessage extends SimpleListenerHost {
 
-    public GroupMessage() {
-       CirnoUtils.registerListener(this);
+    public GroupMessage(Bot bot) {
+        CirnoUtils.registerListener(bot, this);
+
+    }
+
+    @Override
+    public void handleException(@NotNull CoroutineContext context, @NotNull Throwable exception) {
 
     }
 
@@ -26,7 +33,6 @@ public class GroupMessage extends SimpleListenerHost {
         Matcher matcher = pattern.matcher(originText);
         if (matcher.matches()) {
             String group = matcher.group(1);
-            System.out.println(group);
             return "@" + group + " ";
         } else {
             return quoteReply.contentToString();

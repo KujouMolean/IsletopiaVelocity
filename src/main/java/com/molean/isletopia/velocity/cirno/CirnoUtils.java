@@ -10,10 +10,10 @@ import net.mamoe.mirai.event.EventChannel;
 import net.mamoe.mirai.event.SimpleListenerHost;
 import net.mamoe.mirai.event.events.BotEvent;
 
-import java.util.Collections;
-import java.util.HashSet;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -74,14 +74,24 @@ public class CirnoUtils {
     }
 
     public static void groupMessage(String message) {
-        Collections.shuffle(CirnoBot.getSubBotList());
+        List<Bot> availableBot = new ArrayList<>();
         for (Bot bot : CirnoBot.getSubBotList()) {
             if (bot.isOnline()) {
-                Group group = bot.getGroup(483653595L);
-                if (group != null) {
-                    group.sendMessage(message.replaceAll("§.", ""));
-                    break;
-                }
+                availableBot.add(bot);
+            }
+        }
+        int dayOfMonth = LocalDateTime.now().getDayOfMonth();
+        Bot bot;
+        if (availableBot.size() == 0) {
+            bot = CirnoBot.getMainBot();
+        } else {
+            bot = availableBot.get(dayOfMonth % availableBot.size());
+        }
+
+        if (bot != null) {
+            Group group = bot.getGroup(483653595L);
+            if (group != null) {
+                group.sendMessage(message.replaceAll("§.", ""));
             }
         }
     }
@@ -91,8 +101,8 @@ public class CirnoUtils {
         for (Pair<String, String> stringStringPair : message.getPairList()) {
             zhCNRawMessage = zhCNRawMessage.replaceAll("<" + stringStringPair.getKey() + ">", stringStringPair.getValue());
         }
-        for (Pair<String, Function< Locale, String>> stringFunctionPair : message.getDelayedList()) {
-            zhCNRawMessage = zhCNRawMessage.replaceAll("<" + stringFunctionPair.getKey() + ">", stringFunctionPair.getValue().apply( Locale.SIMPLIFIED_CHINESE));
+        for (Pair<String, Function<Locale, String>> stringFunctionPair : message.getDelayedList()) {
+            zhCNRawMessage = zhCNRawMessage.replaceAll("<" + stringFunctionPair.getKey() + ">", stringFunctionPair.getValue().apply(Locale.SIMPLIFIED_CHINESE));
         }
         UniversalChat.chatMessage("白", "§bCirnoBot", message);
         groupMessage(zhCNRawMessage);
@@ -129,8 +139,8 @@ public class CirnoUtils {
         UniversalChat.chatMessage("白", "§o" + p, I18nString.of(m));
     }
 
-    public static void registerListener(SimpleListenerHost simpleListenerHost) {
-        EventChannel<BotEvent> eventChannel = CirnoBot.getMainBot().getEventChannel();
+    public static void registerListener(Bot bot,SimpleListenerHost simpleListenerHost) {
+        EventChannel<BotEvent> eventChannel = bot.getEventChannel();
         eventChannel.registerListenerHost(simpleListenerHost);
     }
 
