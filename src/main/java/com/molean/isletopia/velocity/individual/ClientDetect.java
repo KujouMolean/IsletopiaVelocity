@@ -1,7 +1,9 @@
 package com.molean.isletopia.velocity.individual;
 
+import com.molean.isletopia.shared.annotations.Singleton;
 import com.molean.isletopia.shared.database.ParameterDao;
 import com.molean.isletopia.shared.platform.VelocityRelatedUtils;
+import com.molean.isletopia.velocity.annotation.Listener;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.player.PlayerClientBrandEvent;
 import com.velocitypowered.api.event.player.ServerConnectedEvent;
@@ -12,11 +14,9 @@ import net.kyori.adventure.text.Component;
 
 import java.util.Optional;
 
+@Listener
 public class ClientDetect {
 
-    public ClientDetect() {
-        VelocityRelatedUtils.getProxyServer().getEventManager().register(VelocityRelatedUtils.getPlugin(), this);
-    }
 
     @Subscribe
     public void onJoin(PlayerClientBrandEvent event) {

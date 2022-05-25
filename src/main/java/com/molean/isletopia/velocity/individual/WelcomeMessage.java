@@ -1,6 +1,6 @@
 package com.molean.isletopia.velocity.individual;
 
-import com.molean.isletopia.shared.platform.VelocityRelatedUtils;
+import com.molean.isletopia.velocity.annotation.Listener;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyPingEvent;
 import com.velocitypowered.api.proxy.server.ServerPing;
@@ -16,14 +16,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Random;
 
+@Listener
 public class WelcomeMessage {
-
     private static Favicon favicon;
-
-
     public WelcomeMessage() {
-        VelocityRelatedUtils.getProxyServer().getEventManager().register(VelocityRelatedUtils.getPlugin(), this);
-
         try {
             InputStream inputStream = getClass().getClassLoader().getResourceAsStream("server-icon.png");
             assert inputStream != null;
@@ -33,6 +29,8 @@ public class WelcomeMessage {
             e.printStackTrace();
         }
     }
+
+    private static final Random random = new Random();
 
 
     @Subscribe
@@ -50,7 +48,7 @@ public class WelcomeMessage {
     }
 
 
-    private static final Random random = new Random();
+
 
     public static Component generateRainbowText(String text) {
         String[] split = text.split("#");

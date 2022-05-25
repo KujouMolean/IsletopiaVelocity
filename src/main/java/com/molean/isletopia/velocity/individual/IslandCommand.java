@@ -1,6 +1,7 @@
 package com.molean.isletopia.velocity.individual;
 
 import com.molean.isletopia.shared.platform.VelocityRelatedUtils;
+import com.molean.isletopia.velocity.annotation.Listener;
 import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.command.CommandExecuteEvent;
@@ -12,13 +13,8 @@ import com.velocitypowered.api.proxy.server.RegisteredServer;
 import java.util.Locale;
 import java.util.Optional;
 
+@Listener
 public class IslandCommand {
-
-
-    public IslandCommand() {
-        VelocityRelatedUtils.getProxyServer().getEventManager().register(VelocityRelatedUtils.getPlugin(), this);
-
-    }
 
     @Subscribe
     public void on(CommandExecuteEvent event) {

@@ -1,5 +1,6 @@
 package com.molean.isletopia.velocity.individual;
 
+import com.molean.isletopia.shared.annotations.Singleton;
 import com.molean.isletopia.shared.platform.VelocityRelatedUtils;
 import com.velocitypowered.api.command.CommandManager;
 import com.velocitypowered.api.command.CommandMeta;
@@ -15,12 +16,12 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+@Singleton
 public class UniversalTell implements SimpleCommand {
 
     public UniversalTell() {
         CommandManager commandManager = VelocityRelatedUtils.getProxyServer().getCommandManager();
         CommandMeta meta = commandManager.metaBuilder("tell")
-                // Specify other aliases (optional)
                 .aliases("msg", "w")
                 .build();
         commandManager.register(meta, this);

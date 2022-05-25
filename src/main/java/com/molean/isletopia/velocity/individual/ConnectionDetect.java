@@ -1,6 +1,7 @@
 package com.molean.isletopia.velocity.individual;
 
 import com.molean.isletopia.shared.platform.VelocityRelatedUtils;
+import com.molean.isletopia.velocity.annotation.Listener;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
@@ -10,16 +11,12 @@ import net.kyori.adventure.text.Component;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+@Listener
 public class ConnectionDetect {
-    public ConnectionDetect() {
-        VelocityRelatedUtils.getProxyServer().getEventManager().register(VelocityRelatedUtils.getPlugin(), this);
-    }
 
     @Subscribe
     public void on(KickedFromServerEvent event) {
-
         //如果玩家被踢出服务器, 不会直接退出群组, 而如果踢出理由带有#, 则例外.
-
         RegisteredServer server = event.getServer();
         if (server.getServerInfo().getName().equals("dispatcher")) {
             return;

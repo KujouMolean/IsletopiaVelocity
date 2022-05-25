@@ -1,24 +1,21 @@
 package com.molean.isletopia.velocity;
 
 import com.google.inject.Inject;
-import com.molean.isletopia.shared.message.RedisMessageListener;
+import com.molean.isletopia.shared.ClassResolver;
 import com.molean.isletopia.shared.platform.VelocityRelatedUtils;
-import com.molean.isletopia.shared.utils.RedisUtils;
-import com.molean.isletopia.velocity.cirno.CirnoBot;
-import com.molean.isletopia.velocity.cirno.CirnoHandlerImpl;
-import com.molean.isletopia.velocity.cirno.CommandsRegister;
-import com.molean.isletopia.velocity.handler.HandlerRegister;
-import com.molean.isletopia.velocity.individual.*;
+import com.molean.isletopia.shared.service.RedisService;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
+import com.velocitypowered.api.event.proxy.ProxyReloadEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.proxy.ProxyServer;
-import org.slf4j.Logger;
+import com.velocitypowered.api.proxy.server.RegisteredServer;
 
 import java.io.File;
 import java.util.Locale;
 import java.util.Set;
+import java.util.logging.Logger;
 
 @Plugin(
         id = "isletopia_velocity",
@@ -40,9 +37,8 @@ public class IsletopiaVelocity {
         this.logger = logger;
     }
 
-    @Subscribe
-    public void onProxyInitialization(ProxyInitializeEvent event) {
-        VelocityRelatedUtils.proxyServer = server;
+
+    public void initLibrary() {
         File lib = new File("lib");
         File[] files = lib.listFiles();
         assert files != null;
@@ -57,41 +53,31 @@ public class IsletopiaVelocity {
                 server.getPluginManager().addToClasspath(this, file.toPath());
             }
         }
-        new CommandsRegister();
-        if (VelocityRelatedUtils.getProxyServer().getConfiguration().getShowMaxPlayers() != 5)
-            CirnoBot.init();
-        CirnoBot.setCirnoHandler(new CirnoHandlerImpl());
-        new UniversalTell();
-        new WelcomeMessage();
-        new UniversalChat();
-        new ConnectionDetect();
-        new KickUnsupportedUser();
-        new OnlineModeSwitcher();
-        RedisMessageListener.init();
-        new HandlerRegister();
-        new PlayerInfoBroadcaster();
-        new PlayerLogin();
-        new IslandCommand();
-        new DisableServerCommand();
-        new ClientDetect();
+    }
+
+
+    @Subscribe
+    public void onProxyInitialization(ProxyInitializeEvent event) throws Exception {
+        VelocityRelatedUtils.proxyServer = server;
+        VelocityRelatedUtils.logger = logger;
+
+        initLibrary();
+
+        ClassResolver.INSTANCE.addBean(server);
+        ClassResolver.INSTANCE.addBean(this);
+        ClassResolver.INSTANCE.addBean(server);
+
+        ClassResolver.INSTANCE.loadClass();
+        ClassResolver.INSTANCE.resolveBean();
+        ClassResolver.INSTANCE.resolveFieldInject();
     }
 
     @Subscribe
-    public void onProxyInitialization(ProxyShutdownEvent event) {
-        try {
-            RedisMessageListener.destroy();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        try {
-            RedisUtils.destroy();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        try {
-            CirnoBot.destroy();
-        } catch (Exception e) {
-            e.printStackTrace();
+    public void on(ProxyShutdownEvent event) {
+        DisableTasks object = ClassResolver.INSTANCE.getObject(DisableTasks.class);
+        assert object != null;
+        for (Runnable task : object.getTasks()) {
+            task.run();
         }
     }
 }

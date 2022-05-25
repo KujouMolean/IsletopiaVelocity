@@ -1,16 +1,19 @@
 package com.molean.isletopia.velocity.individual;
 
+import com.molean.isletopia.shared.annotations.AutoInject;
 import com.molean.isletopia.shared.database.IslandDao;
-import com.molean.isletopia.shared.message.ServerMessageUtils;
+import com.molean.isletopia.shared.message.ServerMessageService;
 import com.molean.isletopia.shared.model.Island;
 import com.molean.isletopia.shared.model.IslandId;
 import com.molean.isletopia.shared.platform.VelocityRelatedUtils;
 import com.molean.isletopia.shared.pojo.obj.PlaySoundObject;
+import com.molean.isletopia.shared.service.RedisService;
 import com.molean.isletopia.shared.service.UniversalParameter;
 import com.molean.isletopia.shared.utils.*;
 import com.molean.isletopia.velocity.MessageUtils;
-import com.molean.isletopia.velocity.cirno.CirnoUtils;
-import com.molean.isletopia.velocity.cirno.I18nString;
+
+import com.molean.isletopia.shared.utils.I18nString;
+import com.molean.isletopia.velocity.annotation.Listener;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.PostLoginEvent;
@@ -32,6 +35,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+@Listener
 public class UniversalChat {
     final public static Map<String, Set<String>> collections = new HashMap<>();
     final public static Map<String, String> commandMapping = new HashMap<>();
@@ -95,6 +99,9 @@ public class UniversalChat {
         }
     }
 
+    @AutoInject
+    private ChatChannel chatChannel;
+
     @Subscribe
     public void on(PlayerChatEvent event) {
         if (event.getMessage().startsWith("/")) {
@@ -122,12 +129,9 @@ public class UniversalChat {
         }
 
         addRecord(event.getPlayer().getUniqueId(), m);
-        List<String> channels = ChatChannel.getChannels(event.getPlayer().getUniqueId());
+        List<String> channels = chatChannel.getChannels(event.getPlayer().getUniqueId());
         for (String channel : channels) {
-            UniversalChat.chatMessage(channel, p, I18nString.of(m));
-            if (channel.equalsIgnoreCase("白")) {
-                CirnoUtils.groupMessage("<" + p + "> " + m);
-            }
+            chatMessage(channel, p, I18nString.of(m));
         }
         event.setResult(PlayerChatEvent.ChatResult.denied());
     }
@@ -143,6 +147,9 @@ public class UniversalChat {
 
     }
 
+
+    @AutoInject
+    private UniversalParameter universalParameter;
     @Subscribe
     public void onPlayerJoin(PostLoginEvent event) {
         String name = event.getPlayer().getUsername();
@@ -151,7 +158,7 @@ public class UniversalChat {
                 player.sendActionBar(Component.text("§a" + name + "上线了"));
             }
         }
-        String channel = UniversalParameter.getParameter(event.getPlayer().getUniqueId(), "Channel");
+        String channel = universalParameter.getParameter(event.getPlayer().getUniqueId(), "Channel");
         if (channel == null || channel.isEmpty()) {
             channel = "白";
         }
@@ -159,12 +166,11 @@ public class UniversalChat {
     }
 
 
-    public UniversalChat() {
-        VelocityRelatedUtils.getProxyServer().getEventManager().register(VelocityRelatedUtils.getPlugin(), this);
+    public UniversalChat(RedisService redisService) {
         VelocityRelatedUtils.getProxyServer().getScheduler().buildTask(VelocityRelatedUtils.getPlugin(), () -> {
             for (Player player : VelocityRelatedUtils.getProxyServer().getAllPlayers()) {
-                if (RedisUtils.getCommand().exists("Collection-" + player.getUsername()) > 0) {
-                    String s = RedisUtils.getCommand().get("Collection-" + player.getUsername());
+                if (redisService.getCommand().exists("Collection-" + player.getUsername()) > 0) {
+                    String s = redisService.getCommand().get("Collection-" + player.getUsername());
                     if (s != null && !s.isEmpty()) {
                         String[] split = s.split(",");
                         HashSet<String> strings = new HashSet<>(Arrays.asList(split));
@@ -235,15 +241,15 @@ public class UniversalChat {
     }
 
 
-    private static final Map<String, List<Pair<String, Long>>> playerChatDataMap = new HashMap<>();
+    private final Map<String, List<Pair<String, Long>>> playerChatDataMap = new HashMap<>();
 
 
-    public static void chatMessage(String channel, String sourcePlayer, I18nString i18nString) {
+    public void chatMessage(String channel, String sourcePlayer, I18nString i18nString) {
 
-        ArrayList<Player> targetPlayers = ChatChannel.getPlayersInChannel(channel).stream()
+        ArrayList<Player> targetPlayers = chatChannel.getPlayersInChannel(channel).stream()
                 .map(uuid -> VelocityRelatedUtils.getProxyServer().getPlayer(uuid)).filter(Optional::isPresent).map(Optional::get)
                 .collect(Collectors.toCollection(ArrayList::new));
-        String color = ChatChannel.getChannelColor(channel);
+        String color = chatChannel.getChannelColor(channel);
         ArrayList<Player> targetPlayerList = new ArrayList<>(targetPlayers);
         targetPlayerList.sort((o1, o2) -> o2.getUsername().length() - o1.getUsername().length());
 
@@ -272,7 +278,7 @@ public class UniversalChat {
 
     }
 
-    public static void chatMessageToPlayer(String sourcePlayer, UUID sourcePlayerUUID, Player target, String message, String color, boolean subscribe, ArrayList<Player> targetPlayerListWithLengthDescOrder, Map<Integer, Island> idCache, Map<IslandId, Island> islandIdCache, Map<Locale, String> playerDisplayCache) {
+    public void chatMessageToPlayer(String sourcePlayer, UUID sourcePlayerUUID, Player target, String message, String color, boolean subscribe, ArrayList<Player> targetPlayerListWithLengthDescOrder, Map<Integer, Island> idCache, Map<IslandId, Island> islandIdCache, Map<Locale, String> playerDisplayCache) {
 
         Locale locale = target.getPlayerSettings().getLocale();
         //遍历文本，进行特殊替换。
@@ -605,10 +611,22 @@ public class UniversalChat {
         }
     }
 
+    @AutoInject
 
-    public static void notify(String playerName) {
-        PlaySoundObject playSoundObject = new PlaySoundObject(playerName, "ENTITY_PLAYER_LEVELUP");
-        ServerMessageUtils.broadcastBungeeMessage("PlaySound", playSoundObject);
+    private ServerMessageService serverMessageService;
+
+
+    public  void notify(String playerName) {
+        Optional<Player> player = VelocityRelatedUtils.getProxyServer().getPlayer(playerName);
+        player.ifPresent(value -> {
+            Optional<ServerConnection> currentServer = value.getCurrentServer();
+            currentServer.ifPresent(serverConnection -> {
+                String name = serverConnection.getServerInfo().getName();
+                PlaySoundObject playSoundObject = new PlaySoundObject(playerName, "ENTITY_PLAYER_LEVELUP");
+                serverMessageService.sendMessage(name,  playSoundObject);
+            });
+        });
+
     }
 
 }
